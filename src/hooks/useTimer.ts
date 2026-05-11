@@ -1,7 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import type { TimerState, WorkoutTemplate } from '../types'
 import { computeTimerPhase, computeSkip } from '../utils/timerCalc'
-import { initAudio, playWorkBeep, playRestBeep, playFinishBeep, playCountdownTick, playCountdownFinal } from '../utils/audio'
+import {
+  initAudio,
+  playStartBeep,
+  playHalfwayBeep,
+  playCountdownBeep,
+  playRestBeep,
+  playFinishBeep,
+} from '../utils/audio'
 
 const IDLE: TimerState = {
   status: 'idle',
@@ -19,10 +26,13 @@ export function useTimer(template: WorkoutTemplate | null) {
   stateRef.current = state
   const templateRef = useRef(template)
   templateRef.current = template
+
   const lastPhaseKeyRef = useRef<string | null>(null)
+  // Tracks which phase we've already played the halfway beep for
+  const halfwayPlayedRef = useRef<string | null>(null)
   const wakeLockRef = useRef<WakeLockSentinel | null>(null)
 
-  // Single long-lived interval — handles phase transitions and re-renders
+  // Interval: phase transitions + halfway beep + re-renders
   useEffect(() => {
     const id = window.setInterval(() => {
       const s = stateRef.current
@@ -32,10 +42,15 @@ export function useTimer(template: WorkoutTemplate | null) {
       const phase = computeTimerPhase(t, s.startedAt, s.totalPausedMs)
       const key = `${phase.phase}-${phase.currentRound}`
 
+      // Phase transition
       if (lastPhaseKeyRef.current !== null && lastPhaseKeyRef.current !== key) {
-        if (phase.phase === 'work') playWorkBeep()
-        else if (phase.phase === 'rest') playRestBeep()
-        else if (phase.phase === 'finished') {
+        halfwayPlayedRef.current = null
+        if (phase.phase === 'work') {
+          // Work starts again after rest — same double beep as start
+          playStartBeep()
+        } else if (phase.phase === 'rest') {
+          playRestBeep()
+        } else if (phase.phase === 'finished') {
           playFinishBeep()
           const finished: TimerState = { ...s, status: 'finished' }
           stateRef.current = finished
@@ -43,6 +58,17 @@ export function useTimer(template: WorkoutTemplate | null) {
         }
       }
       lastPhaseKeyRef.current = key
+
+      // Halfway beep: fires once when remaining crosses half of phase duration
+      if (phase.phase !== 'finished' && halfwayPlayedRef.current !== key) {
+        const halfDuration =
+          phase.phase === 'work' ? t.workSeconds / 2 : t.restSeconds / 2
+        if (phase.remaining <= halfDuration) {
+          halfwayPlayedRef.current = key
+          playHalfwayBeep()
+        }
+      }
+
       setTick(n => n + 1)
     }, 100)
 
@@ -70,6 +96,7 @@ export function useTimer(template: WorkoutTemplate | null) {
       stateRef.current = next
       setState(next)
       lastPhaseKeyRef.current = null
+      halfwayPlayedRef.current = null
     }
   }, [template])
 
@@ -78,8 +105,8 @@ export function useTimer(template: WorkoutTemplate | null) {
       ? computeTimerPhase(template, state.startedAt, state.totalPausedMs)
       : null
 
-  // Countdown sounds — useEffect fires exactly once per integer-second change.
-  // This is more reliable than doing it inside setInterval.
+  // Countdown: useEffect fires exactly once per integer-second change
+  // Last 4 seconds (4,3,2,1) → same tone each time
   const ceilRemaining =
     currentPhase && currentPhase.phase !== 'finished' && state.status === 'running'
       ? Math.ceil(currentPhase.remaining)
@@ -90,16 +117,15 @@ export function useTimer(template: WorkoutTemplate | null) {
     : ''
 
   useEffect(() => {
-    if (ceilRemaining < 1 || ceilRemaining > 5) return
-    if (ceilRemaining === 1) playCountdownFinal()
-    else playCountdownTick()
+    if (ceilRemaining < 1 || ceilRemaining > 4) return
+    playCountdownBeep()
   }, [ceilRemaining, phaseKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const start = useCallback(() => {
     const t = templateRef.current
     if (!t) return
     initAudio()
-    playWorkBeep()
+    playStartBeep() // 嘟嘟
     const next: TimerState = {
       status: 'running',
       templateId: t.id,
@@ -109,7 +135,8 @@ export function useTimer(template: WorkoutTemplate | null) {
     }
     stateRef.current = next
     setState(next)
-    lastPhaseKeyRef.current = `work-1`
+    lastPhaseKeyRef.current = 'work-1'
+    halfwayPlayedRef.current = null
   }, [])
 
   const pause = useCallback(() => {
@@ -139,6 +166,7 @@ export function useTimer(template: WorkoutTemplate | null) {
     stateRef.current = next
     setState(next)
     lastPhaseKeyRef.current = null
+    halfwayPlayedRef.current = null
   }, [])
 
   const skip = useCallback(() => {
@@ -149,11 +177,12 @@ export function useTimer(template: WorkoutTemplate | null) {
     const newTotalPausedMs = computeSkip(t, s.startedAt, s.totalPausedMs)
     const newPhase = computeTimerPhase(t, s.startedAt, newTotalPausedMs)
 
-    if (newPhase.phase === 'work') playWorkBeep()
+    if (newPhase.phase === 'work') playStartBeep()
     else if (newPhase.phase === 'rest') playRestBeep()
     else if (newPhase.phase === 'finished') playFinishBeep()
 
     lastPhaseKeyRef.current = `${newPhase.phase}-${newPhase.currentRound}`
+    halfwayPlayedRef.current = null
 
     const next: TimerState = { ...s, totalPausedMs: newTotalPausedMs }
     stateRef.current = next
