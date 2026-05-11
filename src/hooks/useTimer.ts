@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import type { TimerState, WorkoutTemplate } from '../types'
 import { computeTimerPhase, computeSkip } from '../utils/timerCalc'
-import { initAudio, playWorkBeep, playRestBeep, playFinishBeep } from '../utils/audio'
+import { initAudio, playWorkBeep, playRestBeep, playFinishBeep, playCountdownTick, playCountdownFinal } from '../utils/audio'
 
 const IDLE: TimerState = {
   status: 'idle',
@@ -15,7 +15,6 @@ export function useTimer(template: WorkoutTemplate | null) {
   const [state, setState] = useState<TimerState>(IDLE)
   const [tick, setTick] = useState(0)
 
-  // Refs always reflect the latest values without stale closure issues
   const stateRef = useRef(state)
   stateRef.current = state
   const templateRef = useRef(template)
@@ -23,7 +22,7 @@ export function useTimer(template: WorkoutTemplate | null) {
   const lastPhaseKeyRef = useRef<string | null>(null)
   const wakeLockRef = useRef<WakeLockSentinel | null>(null)
 
-  // Single long-lived interval that reads from refs
+  // Single long-lived interval — handles phase transitions and re-renders
   useEffect(() => {
     const id = window.setInterval(() => {
       const s = stateRef.current
@@ -43,7 +42,6 @@ export function useTimer(template: WorkoutTemplate | null) {
           setState(finished)
         }
       }
-
       lastPhaseKeyRef.current = key
       setTick(n => n + 1)
     }, 100)
@@ -65,7 +63,7 @@ export function useTimer(template: WorkoutTemplate | null) {
     }
   }, [state.status])
 
-  // Reset when template changes (different template)
+  // Reset when template changes
   useEffect(() => {
     if (template && stateRef.current.templateId && stateRef.current.templateId !== template.id) {
       const next: TimerState = { ...IDLE, templateId: template.id }
@@ -79,6 +77,23 @@ export function useTimer(template: WorkoutTemplate | null) {
     (state.status === 'running' || state.status === 'finished') && state.startedAt && template
       ? computeTimerPhase(template, state.startedAt, state.totalPausedMs)
       : null
+
+  // Countdown sounds — useEffect fires exactly once per integer-second change.
+  // This is more reliable than doing it inside setInterval.
+  const ceilRemaining =
+    currentPhase && currentPhase.phase !== 'finished' && state.status === 'running'
+      ? Math.ceil(currentPhase.remaining)
+      : -1
+
+  const phaseKey = currentPhase
+    ? `${currentPhase.phase}-${currentPhase.currentRound}`
+    : ''
+
+  useEffect(() => {
+    if (ceilRemaining < 1 || ceilRemaining > 5) return
+    if (ceilRemaining === 1) playCountdownFinal()
+    else playCountdownTick()
+  }, [ceilRemaining, phaseKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const start = useCallback(() => {
     const t = templateRef.current
@@ -145,6 +160,6 @@ export function useTimer(template: WorkoutTemplate | null) {
     setState(next)
   }, [])
 
-  void tick // consumed for re-render
+  void tick
   return { state, currentPhase, start, pause, resume, reset, skip }
 }
