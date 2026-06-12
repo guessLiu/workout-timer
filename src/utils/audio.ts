@@ -10,7 +10,7 @@ export function initAudio(): void {
   if (c.state === 'suspended') c.resume()
 }
 
-function beep(freq: number, duration: number, volume = 0.85): void {
+function beep(freq: number, duration: number, volume = 0.9): void {
   try {
     const c = getCtx()
     if (c.state === 'suspended') c.resume()
@@ -18,7 +18,7 @@ function beep(freq: number, duration: number, volume = 0.85): void {
     const gain = c.createGain()
     osc.connect(gain)
     gain.connect(c.destination)
-    osc.type = 'sine'
+    osc.type = 'triangle'
     osc.frequency.value = freq
     gain.gain.setValueAtTime(0, c.currentTime)
     gain.gain.linearRampToValueAtTime(volume, c.currentTime + 0.005)
@@ -41,17 +41,25 @@ export function playStartBeep(): void {
   setTimeout(du, 220)
 }
 
-// 到一半時間 — 語音「half」
+// 到一半時間 — iOS 用獨特雙音，其他平台用語音
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
+
 export function playHalfwayBeep(): void {
-  try {
-    const utterance = new SpeechSynthesisUtterance('half')
-    utterance.lang = 'en-US'
-    utterance.volume = 1
-    utterance.rate = 1
-    utterance.pitch = 1
-    window.speechSynthesis.speak(utterance)
-  } catch {
-    du()
+  if (isIOS) {
+    beep(660, 0.15, 0.9)
+    setTimeout(() => beep(880, 0.25, 0.9), 180)
+  } else {
+    try {
+      const utterance = new SpeechSynthesisUtterance('half')
+      utterance.lang = 'en-US'
+      utterance.volume = 1
+      utterance.rate = 1
+      utterance.pitch = 1
+      window.speechSynthesis.speak(utterance)
+    } catch {
+      beep(660, 0.15, 0.9)
+      setTimeout(() => beep(880, 0.25, 0.9), 180)
+    }
   }
 }
 
@@ -62,14 +70,14 @@ export function playCountdownBeep(): void {
 
 // 切換到 Rest — 低音（與 Work 提示有所區別）
 export function playRestBeep(): void {
-  beep(440, 0.3, 0.85)
+  beep(440, 0.3, 0.9)
 }
 
 // 完成 — 四聲遞升
 export function playFinishBeep(): void {
-  beep(660, 0.1, 0.85)
-  setTimeout(() => beep(880, 0.1, 0.85), 150)
-  setTimeout(() => beep(1100, 0.1, 0.85), 300)
+  beep(660, 0.1, 0.9)
+  setTimeout(() => beep(880, 0.1, 0.9), 150)
+  setTimeout(() => beep(1100, 0.1, 0.9), 300)
   setTimeout(() => beep(1320, 0.35, 0.9), 450)
 }
 
