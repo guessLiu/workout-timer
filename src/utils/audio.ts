@@ -8,6 +8,13 @@ function getCtx(): AudioContext {
 export function initAudio(): void {
   const c = getCtx()
   if (c.state === 'suspended') c.resume()
+  // Unlock speech synthesis on iOS — must be called from a user gesture
+  if (typeof window.speechSynthesis !== 'undefined') {
+    window.speechSynthesis.cancel()
+    const unlock = new SpeechSynthesisUtterance(' ')
+    unlock.volume = 0
+    window.speechSynthesis.speak(unlock)
+  }
 }
 
 function beep(freq: number, duration: number, volume = 0.9): void {
@@ -30,7 +37,7 @@ function beep(freq: number, duration: number, volume = 0.9): void {
   }
 }
 
-// 標準 嘟（880Hz，所有提示音共用同一音調）
+// 標準 嘟（880Hz）
 function du(): void {
   beep(880, 0.18, 0.9)
 }
@@ -41,34 +48,27 @@ export function playStartBeep(): void {
   setTimeout(du, 220)
 }
 
-// 到一半時間 — iOS 用獨特雙音，其他平台用語音
-const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
-
+// 到一半時間 — 語音「half」（initAudio 已暖機，iOS 也能播）
 export function playHalfwayBeep(): void {
-  if (isIOS) {
+  try {
+    const utterance = new SpeechSynthesisUtterance('half')
+    utterance.lang = 'en-US'
+    utterance.volume = 1
+    utterance.rate = 1
+    utterance.pitch = 1
+    window.speechSynthesis.speak(utterance)
+  } catch {
     beep(660, 0.15, 0.9)
     setTimeout(() => beep(880, 0.25, 0.9), 180)
-  } else {
-    try {
-      const utterance = new SpeechSynthesisUtterance('half')
-      utterance.lang = 'en-US'
-      utterance.volume = 1
-      utterance.rate = 1
-      utterance.pitch = 1
-      window.speechSynthesis.speak(utterance)
-    } catch {
-      beep(660, 0.15, 0.9)
-      setTimeout(() => beep(880, 0.25, 0.9), 180)
-    }
   }
 }
 
-// 倒數 4,3,2,1 — 嘟（同聲調，一聲）
+// 倒數 4,3,2,1
 export function playCountdownBeep(): void {
   du()
 }
 
-// 切換到 Rest — 低音（與 Work 提示有所區別）
+// 切換到 Rest — 低音
 export function playRestBeep(): void {
   beep(440, 0.3, 0.9)
 }
