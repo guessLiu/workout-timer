@@ -63,9 +63,10 @@ export function playHalfwayBeep(): void {
   }
 }
 
-// 倒數 4,3,2,1
-export function playCountdownBeep(): void {
-  du()
+// 倒數 4,3,2 — 低音；1 — 高音
+export function playCountdownBeep(isFinal = false): void {
+  if (isFinal) beep(1100, 0.2, 0.9)
+  else beep(550, 0.15, 0.9)
 }
 
 // 切換到 Rest — 低音

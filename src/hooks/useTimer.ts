@@ -116,7 +116,7 @@ export function useTimer(template: WorkoutTemplate | null) {
 
   useEffect(() => {
     if (ceilRemaining < 1 || ceilRemaining > 4) return
-    playCountdownBeep()
+    playCountdownBeep(ceilRemaining === 1)
   }, [ceilRemaining, phaseKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const start = useCallback(() => {
