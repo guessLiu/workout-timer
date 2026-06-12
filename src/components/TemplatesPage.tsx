@@ -26,19 +26,30 @@ interface EditorProps {
   title: string
 }
 
+const LIMITS: Record<string, [number, number]> = {
+  workSeconds: [5, 300],
+  restSeconds: [0, 300],
+  rounds: [1, 99],
+}
+
 function TemplateEditor({ initial, onSave, onCancel, title }: EditorProps) {
   const [fields, setFields] = useState(initial)
+  const [raw, setRaw] = useState({
+    workSeconds: String(initial.workSeconds),
+    restSeconds: String(initial.restSeconds),
+    rounds: String(initial.rounds),
+  })
 
-  function setNum(key: keyof typeof DEFAULTS, raw: string) {
-    const n = parseInt(raw, 10)
-    if (isNaN(n)) return
-    const limits: Record<string, [number, number]> = {
-      workSeconds: [5, 300],
-      restSeconds: [0, 300],
-      rounds: [1, 99],
-    }
-    const [min, max] = limits[key] ?? [1, 999]
-    setFields(f => ({ ...f, [key]: clamp(n, min, max) }))
+  function handleChange(key: 'workSeconds' | 'restSeconds' | 'rounds', value: string) {
+    setRaw(r => ({ ...r, [key]: value }))
+  }
+
+  function handleBlur(key: 'workSeconds' | 'restSeconds' | 'rounds') {
+    const n = parseInt(raw[key], 10)
+    const [min, max] = LIMITS[key]
+    const clamped = isNaN(n) ? fields[key] : clamp(n, min, max)
+    setFields(f => ({ ...f, [key]: clamped }))
+    setRaw(r => ({ ...r, [key]: String(clamped) }))
   }
 
   function handleSave() {
@@ -69,8 +80,9 @@ function TemplateEditor({ initial, onSave, onCancel, title }: EditorProps) {
               className="field-input"
               type="number"
               inputMode="numeric"
-              value={fields.workSeconds}
-              onChange={e => setNum('workSeconds', e.target.value)}
+              value={raw.workSeconds}
+              onChange={e => handleChange('workSeconds', e.target.value)}
+              onBlur={() => handleBlur('workSeconds')}
               min={5} max={300}
             />
           </div>
@@ -80,8 +92,9 @@ function TemplateEditor({ initial, onSave, onCancel, title }: EditorProps) {
               className="field-input"
               type="number"
               inputMode="numeric"
-              value={fields.restSeconds}
-              onChange={e => setNum('restSeconds', e.target.value)}
+              value={raw.restSeconds}
+              onChange={e => handleChange('restSeconds', e.target.value)}
+              onBlur={() => handleBlur('restSeconds')}
               min={0} max={300}
             />
           </div>
@@ -91,8 +104,9 @@ function TemplateEditor({ initial, onSave, onCancel, title }: EditorProps) {
               className="field-input"
               type="number"
               inputMode="numeric"
-              value={fields.rounds}
-              onChange={e => setNum('rounds', e.target.value)}
+              value={raw.rounds}
+              onChange={e => handleChange('rounds', e.target.value)}
+              onBlur={() => handleBlur('rounds')}
               min={1} max={99}
             />
           </div>
