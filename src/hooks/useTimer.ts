@@ -59,11 +59,9 @@ export function useTimer(template: WorkoutTemplate | null) {
       }
       lastPhaseKeyRef.current = key
 
-      // Halfway beep: fires once when remaining crosses half of phase duration
-      if (phase.phase !== 'finished' && halfwayPlayedRef.current !== key) {
-        const halfDuration =
-          phase.phase === 'work' ? t.workSeconds / 2 : t.restSeconds / 2
-        if (phase.remaining <= halfDuration) {
+      // Halfway beep: fires once when remaining crosses half of work phase (not rest)
+      if (phase.phase === 'work' && halfwayPlayedRef.current !== key) {
+        if (phase.remaining <= t.workSeconds / 2) {
           halfwayPlayedRef.current = key
           playHalfwayBeep()
         }
